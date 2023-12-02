@@ -14,9 +14,9 @@ fun main() {
         }
 
         fun minSetOfCubes() = CubeSet(
-            red = rounds.maxOfOrNull { it.red } ?: 0,
-            green = rounds.maxOfOrNull { it.green } ?: 0,
-            blue = rounds.maxOfOrNull { it.blue } ?: 0
+            red = rounds.maxOf { it.red },
+            green = rounds.maxOf { it.green },
+            blue = rounds.maxOf { it.blue }
         )
     }
 
