@@ -1,72 +1,83 @@
 fun main() {
 
-    fun IntRange.expandBy(n: Int, lowerBound: Int, upperBound: Int) =
-        ((this.first - n).coerceAtLeast(lowerBound)..(this.last + n).coerceAtMost(upperBound))
+    fun IntRange.expand(n: Int) = first - n..last + n
 
-    fun List<String>.expandSurrounding(row: Int, innerRange: IntRange, expandBy: Int) = buildList {
-        val expandedRange = innerRange.expandBy(expandBy, 0, this@expandSurrounding[row].lastIndex)
-        if (row > 0) {
-            add(this@expandSurrounding[row - 1].substring(expandedRange))
-        }
-        add(this@expandSurrounding[row].substring(expandedRange))
-        if (row < this@expandSurrounding.lastIndex) {
-            add(this@expandSurrounding[row + 1].substring(expandedRange))
-        }
+    data class Symbol(
+        val row: Int,
+        val column: Int,
+        val char: Char
+    )
+
+    fun Char.isSymbol() = this != '.' && !isDigit()
+
+    fun Symbol.isPossibleGear() = char == '*'
+
+    data class Number(
+        val row: Int,
+        val columnRange: IntRange,
+        val value: Int
+    ) {
+        val expandedRows = row - 1..row + 1
+        val expandedColumns = columnRange.expand(1)
     }
 
-    fun String.findPartNumbers() =
+    infix fun Number.adjacent(symbol: Symbol) = symbol.row in expandedRows && symbol.column in expandedColumns
+
+    data class EngineSchematic(
+        val numbers: List<Number>,
+        val symbols: List<Symbol>
+    )
+
+    fun String.findPotentialPartNumbers() =
         "(\\d+)".toRegex().findAll(this)
             .map { it.value.toInt() to it.range }
 
-    fun part1(input: List<String>): Int {
-        return input.flatMapIndexed { row, line ->
-            line.findPartNumbers().mapNotNull { partNumber ->
-                input.expandSurrounding(row, partNumber.second, 1)
-                    .joinToString("")
-                    .filterNot { it.isDigit() || it == '.' }
-                    .let {
-                        if (it.isNotEmpty()) partNumber.first
-                        else null
-                    }
+    fun List<String>.parseInput(): EngineSchematic {
+        val numbers = flatMapIndexed { row: Int, line: String ->
+            line.findPotentialPartNumbers()
+                .map { Number(row, it.second, it.first) }
+        }
+
+        val symbols = flatMapIndexed { row: Int, line: String ->
+            line.mapIndexedNotNull { column, char ->
+                if (char.isSymbol()) Symbol(row, column, char)
+                else null
             }
-        }.sum()
+        }
+
+        return EngineSchematic(
+            numbers = numbers,
+            symbols = symbols
+        )
     }
 
-    infix fun IntRange.overlaps(other: IntRange) = first in other || last in other
-
-    fun String.findPartNumbersOverlapRange(range: IntRange) =
-        findPartNumbers()
-            .filter { partNumber -> partNumber.second overlaps range }
-            .map { it.first }
-            .toList()
-
-    fun List<String>.findPartNumbersOverlapRange(range: IntRange) = flatMap {
-        it.findPartNumbersOverlapRange(range)
+    fun part1(input: EngineSchematic): Int {
+        return input.numbers
+            .filter { number ->
+                input.symbols.any { number adjacent it }
+            }.sumOf { it.value }
     }
 
-    fun String.findGears() =
-        "(\\*)".toRegex().findAll(this)
-            .map { it.range }
-
-    fun part2(input: List<String>): Int {
-        return input.flatMapIndexed { row, line ->
-            line.findGears().mapNotNull { gear ->
-                input.expandSurrounding(row, gear, line.length)
-                    .findPartNumbersOverlapRange(gear.expandBy(1, 0, line.lastIndex))
+    fun part2(input: EngineSchematic): Int {
+        return input.symbols
+            .filter { it.isPossibleGear() }
+            .mapNotNull { gear ->
+                input.numbers
+                    .filter { it adjacent gear }
+                    .map { it.value }
                     .let {
                         if (it.size == 2) it.product()
                         else null
                     }
-            }
-        }.sum()
+            }.sum()
     }
 
     // test if implementation meets criteria from the description, like:
-    val testInput = readInput("Day03_test")
+    val testInput = readInput("Day03_test").parseInput()
     check(part1(testInput) == 4361)
     check(part2(testInput) == 467835)
 
-    val input = readInput("Day03")
+    val input = readInput("Day03").parseInput()
     part1(input).println()
     part2(input).println()
 }
