@@ -1,51 +1,62 @@
 fun main() {
-    fun part1(input: List<String>): Int {
-        val height = input.size - 1
-        val width = input[0].length - 1
-        return input.flatMapIndexed { index, line ->
-            "(\\d+)".toRegex().findAll(line).mapNotNull { number ->
-                val range =
-                    ((number.range.first - 1).coerceAtLeast(0)..(number.range.last + 1).coerceAtMost(width))
-                val surrounding = buildString {
-                    if (index > 0) {
-                        append(input[index - 1].substring(range))
-                    }
-                    append(line.substring(range))
-                    if (index < height) {
-                        append(input[index + 1].substring(range))
-                    }
-                }.filter { it.isDigit().not() && it != '.' }
 
-                if (surrounding.isNotEmpty()) number.value.toInt() else null
+    fun IntRange.expandBy(n: Int, lowerBound: Int, upperBound: Int) =
+        ((this.first - n).coerceAtLeast(lowerBound)..(this.last + n).coerceAtMost(upperBound))
+
+    fun List<String>.expandSurrounding(row: Int, innerRange: IntRange, expandBy: Int) = buildList {
+        val expandedRange = innerRange.expandBy(expandBy, 0, this@expandSurrounding[row].lastIndex)
+        if (row > 0) {
+            add(this@expandSurrounding[row - 1].substring(expandedRange))
+        }
+        add(this@expandSurrounding[row].substring(expandedRange))
+        if (row < this@expandSurrounding.lastIndex) {
+            add(this@expandSurrounding[row + 1].substring(expandedRange))
+        }
+    }
+
+    fun String.findPartNumbers() =
+        "(\\d+)".toRegex().findAll(this)
+            .map { it.value.toInt() to it.range }
+
+    fun part1(input: List<String>): Int {
+        return input.flatMapIndexed { row, line ->
+            line.findPartNumbers().mapNotNull { partNumber ->
+                input.expandSurrounding(row, partNumber.second, 1)
+                    .joinToString("")
+                    .filterNot { it.isDigit() || it == '.' }
+                    .let {
+                        if (it.isNotEmpty()) partNumber.first
+                        else null
+                    }
             }
         }.sum()
     }
 
-    infix fun IntRange.intersects(other: IntRange) = first in other || last in other
+    infix fun IntRange.overlaps(other: IntRange) = first in other || last in other
 
-    fun findPartNumbersInRange(input: String, range: IntRange) =
-        "(\\d+)".toRegex().findAll(input)
-            .filter { number -> number.range intersects range }
-            .map { it.value.toInt() }
+    fun String.findPartNumbersOverlapRange(range: IntRange) =
+        findPartNumbers()
+            .filter { partNumber -> partNumber.second overlaps range }
+            .map { it.first }
             .toList()
 
+    fun List<String>.findPartNumbersOverlapRange(range: IntRange) = flatMap {
+        it.findPartNumbersOverlapRange(range)
+    }
+
+    fun String.findGears() =
+        "(\\*)".toRegex().findAll(this)
+            .map { it.range }
+
     fun part2(input: List<String>): Int {
-        val height = input.size - 1
-        val width = input[0].length - 1
-        return input.flatMapIndexed { index, line ->
-            "(\\*)".toRegex().findAll(line).mapNotNull { gear ->
-                val range =
-                    ((gear.range.first - 1).coerceAtLeast(0)..(gear.range.last + 1).coerceAtMost(width))
-                val surrounding = buildList {
-                    if (index > 0) {
-                        addAll(findPartNumbersInRange(input[index - 1], range))
+        return input.flatMapIndexed { row, line ->
+            line.findGears().mapNotNull { gear ->
+                input.expandSurrounding(row, gear, line.length)
+                    .findPartNumbersOverlapRange(gear.expandBy(1, 0, line.lastIndex))
+                    .let {
+                        if (it.size == 2) it.product()
+                        else null
                     }
-                    addAll(findPartNumbersInRange(line, range))
-                    if (index < height) {
-                        addAll(findPartNumbersInRange(input[index + 1], range))
-                    }
-                }
-                if (surrounding.size == 2) surrounding.product() else null
             }
         }.sum()
     }
