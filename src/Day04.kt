@@ -10,15 +10,14 @@ fun main() {
         val matchingNumbersCount = numbers.intersect(winningNumbers).size
     }
 
-    fun String.parseNumbers(): Set<Int> = split("\\s+".toRegex())
+    fun String.parseNumbers(): Set<Int> = split(" ")
         .filter { it.isNotBlank() }
         .map { it.trim().toInt() }
         .toHashSet()
 
     fun List<String>.parseInput() = map { line ->
-        val (game, rest) = line.split(": ")
+        val (game, winningNumbers, numbers) = line.split(": ", " | ")
         val id = game.substringAfter("Card ")
-        val (winningNumbers, numbers) = rest.split(" | ")
         Scratchcard(
             id = id.trim().toInt(),
             winningNumbers = winningNumbers.parseNumbers(),
