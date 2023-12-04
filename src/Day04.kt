@@ -4,19 +4,20 @@ fun main() {
 
     data class Scratchcard(
         val id: Int,
-        val winningNumbers: List<Int>,
-        val numbers: List<Int>
+        val winningNumbers: Set<Int>,
+        val numbers: Set<Int>
     ) {
-        val matchingNumbersCount = numbers.count { it in winningNumbers }
+        val matchingNumbersCount = numbers.intersect(winningNumbers).size
     }
 
-    fun String.parseNumbers(): List<Int> = split("\\s+".toRegex())
+    fun String.parseNumbers(): Set<Int> = split("\\s+".toRegex())
         .filter { it.isNotBlank() }
         .map { it.trim().toInt() }
+        .toHashSet()
 
     fun List<String>.parseInput() = map { line ->
         val (game, rest) = line.split(": ")
-        val id = game.substringAfter(" ")
+        val id = game.substringAfter("Card ")
         val (winningNumbers, numbers) = rest.split(" | ")
         Scratchcard(
             id = id.trim().toInt(),
@@ -31,17 +32,13 @@ fun main() {
     }
 
     fun part2(input: List<Scratchcard>): Int {
-        val cardCopyCount = mutableMapOf<Int, Int>()
-        return input.sumOf { sc ->
-            val currentCardInstances = cardCopyCount[sc.id] ?: 1
+        val cardCopyCount = IntArray(input.size) { 1 }
+        for (sc in input) {
             repeat(sc.matchingNumbersCount) {
-                val newCardCopyId = it + 1 + sc.id
-                cardCopyCount[newCardCopyId] =
-                    cardCopyCount[newCardCopyId]?.plus(currentCardInstances)
-                        ?: (currentCardInstances + 1)
+                cardCopyCount[it + sc.id] += cardCopyCount[sc.id - 1]
             }
-            currentCardInstances
         }
+        return cardCopyCount.sum()
     }
 
     // test if implementation meets criteria from the description, like:
