@@ -1,5 +1,4 @@
-import java.nio.file.Path
-import java.util.PriorityQueue
+import java.util.*
 import kotlin.system.measureTimeMillis
 
 fun main() {
@@ -47,13 +46,11 @@ fun main() {
         calculateCost: (T) -> Int = { _ -> 1 }
     ): Int {
         val dist = mutableMapOf(start to 0)
-        val prev = mutableMapOf<T, T>()
-        val queue = PriorityQueue<Pair<T, Int>> { n1, n2 ->
-            n1.second - n2.second
-        }
-        queue.add(start to dist[start]!!)
+        //val prev = mutableMapOf<T, T>()
+        val queue = PriorityQueue<IndexedValue<T>> { n1, n2 -> n1.index - n2.index }
+        queue.add(IndexedValue(dist[start]!!, start))
         while (queue.isNotEmpty()) {
-            val (item, cost) = queue.poll()
+            val (cost, item) = queue.poll()
             if (isGoal(item)) {
                 return cost
             }
@@ -64,9 +61,9 @@ fun main() {
                     val newCost = cost + calculateCost(it)
                     if (newCost < oldCost) {
                         dist[it] = newCost
-                        prev[it] = item
-                        queue.remove(it to oldCost)
-                        queue.add(it to newCost)
+                        //prev[it] = item
+                        queue.remove(IndexedValue(oldCost, it))
+                        queue.add(IndexedValue(newCost, it))
                     }
                 }
         }
@@ -87,7 +84,7 @@ fun main() {
                                 it.position.column in 0..input.first().lastIndex
                     }
             },
-            canMove = { from, to ->
+            canMove = { _, to ->
                 to.directionStepsCount <= 3
             },
             calculateCost = { input[it.position.row][it.position.column] }
@@ -109,7 +106,7 @@ fun main() {
                             it.position.column in 0..input.first().lastIndex
                 }
             },
-            canMove = { from, to ->
+            canMove = { _, to ->
                 to.directionStepsCount <= 10
             },
             calculateCost = { input[it.position.row][it.position.column] }
