@@ -2,6 +2,12 @@ import java.math.BigInteger
 import java.security.MessageDigest
 import kotlin.io.path.Path
 import kotlin.io.path.readLines
+import kotlin.io.path.readText
+
+/**
+ * Reads all text from the given input txt file.
+ */
+fun readInputRaw(name: String) = Path("src/$name.txt").readText()
 
 /**
  * Reads lines from the given input txt file.
