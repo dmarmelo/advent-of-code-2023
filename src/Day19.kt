@@ -1,95 +1,112 @@
 import kotlin.system.measureTimeMillis
 
-fun IntRange.split(value: Int) = listOf(first..<value, value + 1..last)
-
-private enum class PartRating {
+private enum class RatingCategory {
     X, M, A, S
 }
 
 private data class Part<T>(
-    val ratings: Map<PartRating, T>
+    val ratings: Map<RatingCategory, T>
 ) {
-    operator fun get(rating: PartRating) = ratings[rating]!!
-}
-
-private sealed class ConditionResult
-private class NextWorkflow(val code: String) : ConditionResult()
-private data object NoResult : ConditionResult()
-private data object Accepted : ConditionResult()
-private data object Rejected : ConditionResult()
-
-private enum class ConditionComparator {
-    LESS_THAN, GREATER_THAN
-}
-
-private sealed class Contition {
-    abstract operator fun invoke(part: Part<Int>): ConditionResult
-    abstract operator fun invoke(part: Part<IntRange>): Map<Part<IntRange>, ConditionResult>
-}
-
-private data class ParameterizedContition(
-    val rating: PartRating,
-    val comparator: ConditionComparator,
-    val value: Int,
-    val conditionResult: ConditionResult
-) : Contition() {
-    override fun invoke(part: Part<Int>) = when (comparator) {
-        ConditionComparator.LESS_THAN -> if (part[rating] < value) conditionResult else NoResult
-        ConditionComparator.GREATER_THAN -> if (part[rating] > value) conditionResult else NoResult
-    }
-
-    override fun invoke(part: Part<IntRange>): Map<Part<IntRange>, ConditionResult> {
-        val partRating = part[rating]
-        return if (value in partRating) {
-            val noResultPart = Part(part.ratings.toMutableMap().apply { set(rating, value..value) }) to NoResult
-
-            partRating.split(value)
-                .map { range ->
-                    Part(part.ratings.toMutableMap().apply { set(rating, range) })
-                }
-                .map { this(it) }
-                .reduce { a, b -> a + b } + noResultPart
-        } else {
-            mapOf(
-                part to when (comparator) {
-                    ConditionComparator.LESS_THAN -> if (partRating.last < value) conditionResult else NoResult
-                    ConditionComparator.GREATER_THAN -> if (partRating.first > value) conditionResult else NoResult
-                }
-            )
-        }
-    }
-}
-
-private data class ValueContition(
-    val value: ConditionResult
-) : Contition() {
-    override fun invoke(part: Part<Int>) = value
-    override fun invoke(part: Part<IntRange>) = mapOf(part to value)
+    operator fun get(rating: RatingCategory) = ratings[rating]!!
+    fun copy(category: RatingCategory, value: T) = Part(ratings.toMutableMap().apply { set(category, value) })
 }
 
 private data class Workflow(
-    val code: String,
-    val conditions: List<Contition>
+    val name: String,
+    val rules: List<Rule>
 )
+
+private sealed interface Rule {
+    val next: RuleResult
+    operator fun invoke(part: Part<Int>): RuleResult
+    operator fun invoke(part: Part<IntRange>): Map<Part<IntRange>, RuleResult>
+
+    data class LessThan(
+        val category: RatingCategory,
+        val value: Int,
+        override val next: RuleResult
+    ) : Rule {
+        override fun invoke(part: Part<Int>) =
+            if (part[category] < value) next else RuleResult.None
+
+        override fun invoke(part: Part<IntRange>): Map<Part<IntRange>, RuleResult> {
+            val relevant = part[category]
+            return when {
+                value in relevant -> mapOf(
+                    part.copy(category, (relevant.first..<value)) to next,
+                    part.copy(category, (value..relevant.last)) to RuleResult.None
+                )
+
+                value > relevant.first -> mapOf(
+                    part.copy(category, relevant) to next
+                )
+
+                else -> mapOf(
+                    part.copy(category, relevant) to RuleResult.None
+                )
+            }
+        }
+    }
+
+    data class GreaterThan(
+        val category: RatingCategory,
+        val value: Int,
+        override val next: RuleResult
+    ) : Rule {
+        override fun invoke(part: Part<Int>) =
+            if (part[category] > value) next else RuleResult.None
+
+        override fun invoke(part: Part<IntRange>): Map<Part<IntRange>, RuleResult> {
+            val relevant = part[category]
+            return when {
+                value in relevant -> mapOf(
+                    part.copy(category, ((value + 1)..relevant.last)) to next,
+                    part.copy(category, (relevant.first..value)) to RuleResult.None
+                )
+
+                value < relevant.first -> mapOf(
+                    part.copy(category, relevant) to next
+                )
+
+                else -> mapOf(
+                    part.copy(category, relevant) to RuleResult.None
+                )
+            }
+        }
+    }
+
+    data class Unconditional(
+        override val next: RuleResult
+    ) : Rule {
+        override fun invoke(part: Part<Int>) = next
+
+        override fun invoke(part: Part<IntRange>) = mapOf(part to next)
+    }
+}
+
+private sealed interface RuleResult {
+    class NextWorkflow(val code: String) : RuleResult
+    data object Accepted : RuleResult
+    data object Rejected : RuleResult
+    data object None : RuleResult
+}
+
 
 fun main() {
 
-    fun String.toPartRating() = PartRating.valueOf(uppercase())
-    fun Char.toPartRating() = toString().toPartRating()
-
-    fun Char.toConditionComparator() = when (this) {
-        '<' -> ConditionComparator.LESS_THAN
-        '>' -> ConditionComparator.GREATER_THAN
-        else -> error("Unknown ConditionComparator: $this")
+    fun <K, V> List<Map<K, V>>.join(): Map<K, V> {
+        return if (isEmpty()) emptyMap()
+        else reduce { a, b -> a + b }
     }
 
-    fun String.toResult() = when (this) {
-        "A" -> Accepted
-        "R" -> Rejected
-        else -> NextWorkflow(this)
-    }
+    fun String.toRatingCategory() = RatingCategory.valueOf(uppercase())
+    fun Char.toRatingCategory() = toString().toRatingCategory()
 
-    fun Char.toResult() = toString().toResult()
+    fun String.toRuleResult() = when (this) {
+        "A" -> RuleResult.Accepted
+        "R" -> RuleResult.Rejected
+        else -> RuleResult.NextWorkflow(this)
+    }
 
     data class Input(
         val workflows: List<Workflow>,
@@ -97,31 +114,39 @@ fun main() {
     )
 
     fun String.toWorkflow(): Workflow {
-        val code = substringBefore('{')
-        val conditions = substringAfter('{').dropLast(1).split(',')
-            .map { conditionBlock ->
-                val parts = conditionBlock.split(':')
-                if (parts.size == 1) {
-                    ValueContition(parts.first().toResult())
+        val name = substringBefore('{')
+        val rules = substringAfter('{').dropLast(1).split(',')
+            .map { rule ->
+                if (':' in rule) {
+                    val (condition, next) = rule.split(':')
+                    when (condition[1]) {
+                        '>' -> Rule.GreaterThan(
+                            condition[0].toRatingCategory(),
+                            condition.substring(2).toInt(),
+                            next.toRuleResult()
+                        )
+
+                        '<' -> Rule.LessThan(
+                            condition[0].toRatingCategory(),
+                            condition.substring(2).toInt(),
+                            next.toRuleResult()
+                        )
+
+                        else -> error("Unknown condition comparator: ${condition[1]} in rule: $rule")
+                    }
                 } else {
-                    val condition = parts[0]
-                    ParameterizedContition(
-                        condition[0].toPartRating(),
-                        condition[1].toConditionComparator(),
-                        condition.substring(2).toInt(),
-                        parts[1].toResult()
-                    )
+                    Rule.Unconditional(rule.toRuleResult())
                 }
             }
 
-        return Workflow(code, conditions)
+        return Workflow(name, rules)
     }
 
     fun String.toPart(): Part<Int> {
         val ratings = drop(1).dropLast(1).split(',')
             .associate {
                 val (rating, value) = it.split('=')
-                rating.toPartRating() to value.toInt()
+                rating.toRatingCategory() to value.toInt()
             }
         return Part(ratings)
     }
@@ -141,55 +166,46 @@ fun main() {
         )
     }
 
-    fun Workflow.run(part: Part<Int>): ConditionResult {
-        for (condition in conditions) {
-            val result = condition(part)
-            if (result !is NoResult) {
-                return result
-            }
-        }
-        return NoResult
-    }
+    fun Workflow.run(part: Part<Int>) =
+        rules.first { it(part) !is RuleResult.None }.next
 
-    fun Workflow.run(part: Part<IntRange>): Map<Part<IntRange>, ConditionResult> {
-        val result = mutableMapOf<Part<IntRange>, ConditionResult>()
-        var queue = setOf(part)
-        for (condition in conditions) {
-            if (queue.isEmpty()) break
-            val map = queue.map { condition(it) }
-            val reduced = map.reduce { a, b -> a + b }
-            result += reduced.filter { it.value !is NoResult }
-            queue = reduced.filter { it.value is NoResult }.keys
+    fun Workflow.run(part: Part<IntRange>): Map<Part<IntRange>, RuleResult> {
+        val result = mutableMapOf<Part<IntRange>, RuleResult>()
+        var remaining = setOf(part)
+        for (rule in rules) {
+            if (remaining.isEmpty()) break
+            val map = remaining.map { rule(it) }.join()
+            result += map.filter { it.value !is RuleResult.None }
+            remaining = map.filter { it.value is RuleResult.None }.keys
         }
         return result
     }
 
-    fun List<Workflow>.run(part: Part<Int>): ConditionResult {
-        val workflowMap = associateBy { it.code }
-        var next = workflowMap["in"]!!
+    fun List<Workflow>.run(part: Part<Int>): RuleResult {
+        val workflowMap = associateBy { it.name }
+        var next = "in"
         while (true) {
-            when (val result = next.run(part)) {
-                Accepted -> return Accepted
-                Rejected -> return Rejected
-                is NextWorkflow -> next = workflowMap[result.code]!!
-                NoResult -> continue
+            when (val result = workflowMap[next]!!.run(part)) {
+                RuleResult.Accepted -> return RuleResult.Accepted
+                RuleResult.Rejected -> return RuleResult.Rejected
+                is RuleResult.NextWorkflow -> next = result.code
+                RuleResult.None -> continue
             }
         }
     }
 
-    fun List<Workflow>.run(part: Part<IntRange>): Map<Part<IntRange>, ConditionResult> {
-        val workflowMap = associateBy { it.code }
-
-        val result = mutableMapOf<Part<IntRange>, ConditionResult>()
-        var queue = mapOf(part to NextWorkflow("in"))
-        while (queue.isNotEmpty()) {
-            val map = queue.map { (part, next) ->
-                workflowMap[next.code]!!.run(part)
-            }
-            val reduce = map.reduce { a, b -> a + b }
-            result += reduce.filter { it.value !is NextWorkflow }
-            @Suppress("UNCHECKED_CAST")
-            queue = reduce.filter { it.value is NextWorkflow } as Map<Part<IntRange>, NextWorkflow>
+    fun List<Workflow>.run(part: Part<IntRange>): Map<Part<IntRange>, RuleResult> {
+        val workflowMap = associateBy { it.name }
+        val result = mutableMapOf<Part<IntRange>, RuleResult>()
+        var remaining = mapOf(part to "in")
+        while (remaining.isNotEmpty()) {
+            val map = remaining.map { (part, next) ->
+                workflowMap[next]!!.run(part)
+            }.join()
+            result += map.filter { it.value !is RuleResult.NextWorkflow }
+            remaining = map.filter { it.value is RuleResult.NextWorkflow }
+                .map { it.key to (it.value as RuleResult.NextWorkflow).code }
+                .toMap()
         }
         return result
     }
@@ -197,7 +213,7 @@ fun main() {
     fun part1(input: Input): Int {
         return input.parts
             .associateWith { input.workflows.run(it) }
-            .filter { it.value is Accepted }
+            .filter { it.value is RuleResult.Accepted }
             .keys.sumOf { it.ratings.values.sum() }
     }
 
@@ -205,21 +221,17 @@ fun main() {
         val ratingRange = 1..4000
         val startPart = Part(
             mapOf(
-                PartRating.X to ratingRange,
-                PartRating.M to ratingRange,
-                PartRating.A to ratingRange,
-                PartRating.S to ratingRange
+                RatingCategory.X to ratingRange,
+                RatingCategory.M to ratingRange,
+                RatingCategory.A to ratingRange,
+                RatingCategory.S to ratingRange
             )
         )
-        val run = input.workflows.run(startPart)
-
-        val keys = run.filter { it.value is Accepted }.keys.sumOf { part ->
-            part.ratings.map {
-                it.value.count().toLong()
-            }.product()
-        }
-
-        return keys
+        return input.workflows.run(startPart)
+            .filter { it.value is RuleResult.Accepted }
+            .keys.sumOf { part ->
+                part.ratings.map { it.value.count().toLong() }.product()
+            }
     }
 
     // test if implementation meets criteria from the description, like:
