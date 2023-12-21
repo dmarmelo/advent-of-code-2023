@@ -45,8 +45,8 @@ fun main() {
     }
 
     fun List<Instruction>.edges() =
-        fold(listOf(Point2D(0, 0))) { acc, instruction ->
-            acc + acc.last().move(instruction)
+        runningFold(Point2D(0, 0)) { acc, instruction ->
+            acc.move(instruction)
         }
 
     fun List<Instruction>.fix() = map { instruction ->
@@ -63,6 +63,7 @@ fun main() {
     // https://en.wikipedia.org/wiki/Shoelace_formula
     // https://en.wikipedia.org/wiki/Pick%27s_theorem
     // https://www.reddit.com/r/adventofcode/comments/18l8mao/2023_day_18_intuition_for_why_spoiler_alone/
+    // https://todd.ginsberg.com/post/advent-of-code/2023/day18/
 
     fun List<Point2D>.shoelace() = zipWithNext { p1, p2 ->
         p1.row * p2.column - p2.row * p1.column

@@ -54,7 +54,7 @@ fun main() {
                 if (line.springs.substring(0, current).any { it == '.' }) {
                     return 0
                 }
-                // Rest of the string neede for the group?
+                // Rest of the string needed for the group?
                 if (line.springs.length == current) {
                     // Is the last group?
                     return if (line.groups.size == 1) 1
