@@ -10,31 +10,20 @@ fun main() {
         return input.sumOf { it.holidayHash() }
     }
 
-    data class Lens(
-        val label: String,
-        val focalLength: Int
-    )
-
     fun part2(input: List<String>): Int {
-        val boxes = Array<MutableList<Lens>>(256) { mutableListOf() }
-        for (step in input) {
-            val split = step.split('=', '-').filterNot { it.isBlank() }
-            val label = split.first()
-            val boxIndex = label.holidayHash()
-            val box = boxes[boxIndex]
-            val indexOfLens = box.indexOfFirst { it.label == label }
-            val containsLens = indexOfLens >= 0
-            if (containsLens && split.size == 2) {
-                box[indexOfLens] = Lens(label, split.last().toInt())
-            } else if (!containsLens && split.size == 2) {
-                box += Lens(label, split.last().toInt())
-            } else if (containsLens) {
-                box.removeAt(indexOfLens)
+        val boxes = Array<MutableMap<String, Int>>(256) { mutableMapOf() }
+        for (instruction in input) {
+            if (instruction.endsWith('-')) {
+                val label = instruction.substringBefore('-')
+                boxes[label.holidayHash()].remove(label)
+            } else {
+                val label = instruction.substringBefore('=')
+                boxes[label.holidayHash()][label] = instruction.substringAfter('=').toInt()
             }
         }
         return boxes.flatMapIndexed { boxIndex, box ->
-            box.mapIndexed { lensIndex, lens ->
-                (1 + boxIndex) * (lensIndex + 1) * lens.focalLength
+            box.values.mapIndexed { lensIndex, lens ->
+                (1 + boxIndex) * (lensIndex + 1) * lens
             }
         }.sum()
     }
