@@ -2,7 +2,7 @@ import kotlin.system.measureTimeMillis
 
 fun main() {
 
-    infix fun LongRange.overlaps(other: LongRange) = first in other || last in other
+    infix fun LongRange.intersects(other: LongRange) = first <= other.last && last >= other.first
 
     data class MapEntry(
         val sourceRange: LongRange,
@@ -11,7 +11,7 @@ fun main() {
 
     operator fun MapEntry.contains(input: Long) = input in sourceRange
 
-    operator fun MapEntry.contains(input: LongRange) = input overlaps sourceRange
+    operator fun MapEntry.contains(input: LongRange) = input intersects sourceRange
 
     fun MapEntry.map(input: Long) = (destinationStart - sourceRange.first) + input
 
@@ -119,9 +119,8 @@ fun main() {
     }
 
     fun part2(input: Almanac): Long {
-        return input.mapSeeds(input.seedRanges).flatMap { it.second }
-            // For some reason the min value on the real data is 0, but the real answer is the min non-zero value
-            .sortedBy { it.first }.filterNot { it.first == 0L }
+        return input.mapSeeds(input.seedRanges)
+            .flatMap { it.second }
             .minOf { it.first }
     }
 
